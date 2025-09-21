@@ -1,0 +1,357 @@
+#!/usr/bin/env python3
+class Rational:
+    def __init__(self, numerator, denominator=1):
+        self.numerator = numerator
+        self.denominator = denominator
+        self.simplify()
+    
+    def simplify(self):
+        """Simplify the fraction"""
+        gcd_val = gcd(self.numerator, self.denominator)
+        self.numerator //= gcd_val
+        self.denominator //= gcd_val
+        
+    def __add__(self, other):
+        if isinstance(other, Rational):
+            new_num = self.numerator * other.denominator + other.numerator * self.denominator
+            new_den = self.denominator * other.denominator
+            return Rational(new_num, new_den)
+        # Handle other cases (int, float, etc.)
+    
+    def __sub__(self, other):
+        # Similar to addition
+        pass
+    
+    def __mul__(self, other):
+        # Implement multiplication
+        pass
+    
+    def __truediv__(self, other):
+        # Implement division
+        pass
+    
+    def __str__(self):
+        if self.denominator == 1:
+            return str(self.numerator)
+        return f"{self.numerator}/{self.denominator}"
+
+def gcd(a, b):
+    """Compute greatest common divisor"""
+    while b:
+        a, b = b, a % b
+    return a
+
+def get_operand(expr_str, left=True):
+    """
+    Extract a complete operand from an expression string.
+    
+    Args:
+        expr_str: The expression string to parse
+        left: Boolean indicating if we're looking for left operand (True) 
+              or right operand (False)
+    
+    Returns:
+        The operand as a string
+    """
+    if not expr_str:
+        raise ValueError("Missing operand")
+    
+    # For left operands, we scan right-to-left
+    if left:
+        expr_str = expr_str[::-1]  # Reverse for easier parsing
+        
+    operand = []
+    i = 0
+    n = len(expr_str)
+    
+    while i < n:
+        char = expr_str[i]
+        
+        # Handle numbers and decimal points
+        if char.isdigit() or char == '.':
+            operand.append(char)
+            i += 1
+        # Handle variables and functions
+        elif char.isalpha():
+            operand.append(char)
+            i += 1
+            # For left operands, variables must be read in reverse
+            while i < n and expr_str[i].isalpha() and not left:
+                operand.append(expr_str[i])
+                i += 1
+        # Handle complex numbers
+        elif char == 'i':
+            operand.append(char)
+            i += 1
+        # Handle signs
+        elif char in '+-':
+            # Sign is part of the number if:
+            # - At start of string (for left operand, which is reversed)
+            # - Following an operator
+            if i == 0 or (i > 0 and expr_str[i-1] in '+-*/%^('):
+                operand.append(char)
+                i += 1
+            else:
+                break
+        # Stop at operators or parentheses
+        elif char in '*/%^()':
+            break
+        else:
+            raise ValueError(f"Invalid character in expression: {char}")
+    
+    # For left operands, reverse back to original order
+    if left:
+        operand = operand[::-1]
+    
+    return ''.join(operand)
+
+def evaluate_function_call(expr, variables, functions):
+    """
+    Evaluate a function call expression like 'f(2)' or 'g(x+1)'.
+    
+    Args:
+        expr: The function call expression (e.g., "f(2)", "g(x+1)")
+        variables: Dictionary of current variables
+        functions: Dictionary of defined functions
+        
+    Returns:
+        The result of the function evaluation
+    """
+    # Extract function name and argument
+    func_name = expr[:expr.index('(')].strip().lower()
+    arg_expr = expr[expr.index('(')+1:expr.rindex(')')].strip()
+    
+    # Check if function exists
+    if func_name not in functions:
+        raise ValueError(f"Function '{func_name}' not defined")
+    
+    # Get function definition (parameter name and expression)
+    param_name, func_expr = functions[func_name]
+    
+    # Evaluate the argument
+    arg_value = evaluate_expression(arg_expr, variables, functions)
+    
+    # Create a temporary context with the parameter value
+    temp_vars = variables.copy()
+    temp_vars[param_name.lower()] = arg_value  # Case insensitive
+    
+    # Evaluate the function expression with the new parameter value
+    return evaluate_expression(func_expr, temp_vars, functions)
+
+class Complex:
+    def __init__(self, real, imaginary):
+        self.real = real
+        self.imaginary = imaginary
+    
+    def __add__(self, other):
+        if isinstance(other, Complex):
+            return Complex(self.real + other.real, 
+                          self.imaginary + other.imaginary)
+        # Handle adding real numbers
+    
+    def __sub__(self, other):
+        # Implement subtraction
+        pass
+    
+    def __mul__(self, other):
+        # Implement multiplication (remember i² = -1)
+        pass
+    
+    def __str__(self):
+        if self.imaginary == 0:
+            return str(self.real)
+        elif self.real == 0:
+            return f"{self.imaginary}i"
+        else:
+            operator = "+" if self.imaginary >= 0 else "-"
+            return f"{self.real} {operator} {abs(self.imaginary)}i"
+        
+def process_input(user_input, variables, functions):
+    # Check for variable assignment
+    if '=' in user_input:
+        return handle_assignment(user_input, variables, functions)
+    
+    # Check for evaluation request
+    if user_input.endswith('=?'):
+        return evaluate_expression(user_input[:-2], variables, functions)
+    
+    # Check if it's just an expression to evaluate
+    return evaluate_expression(user_input, variables, functions)
+
+def handle_assignment(user_input, variables, functions):
+    parts = user_input.split('=', 1)
+    lhs = parts[0].strip()
+    rhs = parts[1].strip()
+    
+    # Check if it's a function assignment (like f(x) = ...)
+    if '(' in lhs and ')' in lhs:
+        return handle_function_assignment(lhs, rhs, functions)
+    else:
+        # Handle regular variable assignment
+        value = evaluate_expression(rhs, variables, functions)
+        variables[lhs.lower()] = value  # Case insensitive
+        return value
+
+def handle_function_assignment(lhs, rhs, functions):
+    # Extract function name and parameter
+    func_name = lhs[:lhs.index('(')].strip()
+    param = lhs[lhs.index('(')+1:lhs.index(')')].strip()
+    
+    # Store the function expression
+    functions[func_name.lower()] = (param, rhs)
+    return rhs
+
+def evaluate_expression(expr, variables, functions):
+    # Remove whitespace
+    expr = expr.replace(" ", "")
+    
+    # Check for function calls
+    if '(' in expr and ')' in expr:
+        return evaluate_function_call(expr, variables, functions)
+    
+    # Handle parentheses first
+    while '(' in expr:
+        start = expr.rfind('(')
+        end = expr.find(')', start)
+        sub_expr = expr[start+1:end]
+        sub_result = evaluate_expression(sub_expr, variables, functions)
+        expr = expr[:start] + str(sub_result) + expr[end+1:]
+    
+    # Handle operators in order of precedence
+    for ops in [['^'], ['*', '/', '%'], ['+', '-']]:
+        while any(op in expr for op in ops):
+            # Find the operator to evaluate
+            op_pos = -1
+            for op in ops:
+                if op in expr:
+                    op_pos = expr.find(op)
+                    break
+            
+            if op_pos == -1:
+                break
+                
+            # Get left and right operands
+            left = get_operand(expr[:op_pos], left=True)
+            right = get_operand(expr[op_pos+1:], left=False)
+            
+            # Evaluate
+            result = apply_operator(expr[op_pos], left, right)
+            
+            # Replace in expression
+            expr = expr[:op_pos-len(left)] + str(result) + expr[op_pos+1+len(right):]
+    
+    # The remaining should be a single value
+    return parse_value(expr, variables)
+
+def apply_operator(op, left, right):
+    if op == '+':
+        return left + right
+    elif op == '-':
+        return left - right
+    # Implement other operators
+    
+    
+class Matrix:
+    def __init__(self, rows):
+        self.rows = rows
+        self.validate()
+    
+    def validate(self):
+        # Check all rows have same number of columns
+        if not self.rows:
+            raise ValueError("Empty matrix")
+        cols = len(self.rows[0])
+        for row in self.rows:
+            if len(row) != cols:
+                raise ValueError("Inconsistent matrix dimensions")
+    
+    def __mul__(self, other):
+        # Scalar multiplication
+        if isinstance(other, (int, float, Rational)):
+            new_rows = [[other * cell for cell in row] for row in self.rows]
+            return Matrix(new_rows)
+        
+        # Matrix multiplication
+        if isinstance(other, Matrix):
+            if len(self.rows[0]) != len(other.rows):
+                raise ValueError("Incompatible matrix dimensions")
+            
+            result = []
+            for i in range(len(self.rows)):
+                new_row = []
+                for j in range(len(other.rows[0])):
+                    total = 0
+                    for k in range(len(self.rows[0])):
+                        total += self.rows[i][k] * other.rows[k][j]
+                    new_row.append(total)
+                result.append(new_row)
+            return Matrix(result)
+    
+    def __str__(self):
+        return '\n'.join(['[ ' + ' , '.join(map(str, row)) + ' ]' for row in self.rows])
+    
+    
+def parse_value(value_str, variables):
+    # Check if it's a variable
+    if value_str.lower() in variables:
+        return variables[value_str.lower()]
+    
+    # Check for complex number
+    if 'i' in value_str:
+        return parse_complex(value_str)
+    
+    # Check for matrix
+    if value_str.startswith('[[') and value_str.endswith(']]'):
+        return parse_matrix(value_str)
+    
+    # Check for rational number
+    if '/' in value_str:
+        num, den = value_str.split('/')
+        return Rational(int(num), int(den))
+    
+    # Try as float, then integer
+    try:
+        return float(value_str) if '.' in value_str else int(value_str)
+    except ValueError:
+        raise ValueError(f"Unknown value or variable: {value_str}")
+
+def parse_complex(complex_str):
+    # Handle cases like "3+2i", "4-i", "i", "-2i", etc.
+    pass
+
+def parse_matrix(matrix_str):
+    # Parse strings like "[[1,2];[3,4]]"
+    pass
+
+
+def main():
+    variables = {}  # Dictionary to store variables
+    functions = {}  # Dictionary to store functions
+    
+    print("Computor v2 - Your homemade basic calculator")
+    print("Type 'exit' to quit")
+    
+    while True:
+        try:
+            user_input = input("> ").strip()
+            if user_input.lower() == 'exit':
+                break
+                
+            # Skip empty input
+            if not user_input:
+                continue
+                
+            # Process the input here
+            result = process_input(user_input, variables, functions)
+            
+            if result is not None:
+                print(result)
+                
+        except (KeyboardInterrupt, EOFError):
+            print("\nGoodbye!")
+            break
+        except Exception as e:
+            print(f"Error: {e}")
+
+if __name__ == "__main__":
+    main()
